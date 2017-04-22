@@ -1,0 +1,75 @@
+#!/bin/bash
+
+#pfad variable erweitern
+#PATH=$PATH:/tmp/
+#export
+rtmp_config="rtmp {
+    server {
+        listen 1935;
+        chunk_size 4096;
+
+        application live {
+                live on;
+                record off;
+        }
+    }
+}
+"
+
+start_service="[Unit]
+Description=The NGINX HTTP and resverse proxy server
+After=syslog.target network.target remote-fs.target nss-lookup.target
+ 
+[Service] 
+Type=forking 
+PIDFile=/usr/local/nginx/logs/nginx.pid 
+ExecStartPre=/usr/local/nginx/sbin/nginx -t 
+ExecStart=/usr/local/nginx/sbin/nginx 
+ExecReload=/bin/kill -s HUP $MAINPID 
+ExecStop=/bin/kill -s QUIT $MAINPID 
+PrivateTmp=true 
+ 
+[Install] 
+WantedBy=multi-user.target
+" 
+
+#Abhängigkeiten für RTMP und nginx
+tput bold;tput setaf 2; echo "Installiere Abhängigkeiten"; tput sgr0
+apt-get -y install build-essential libpcre3 libpcre3-dev libssl-dev zip
+
+#Download von nginx und RTMP Module
+cd /tmp/
+tput bold;tput setaf 2; echo "Download nginx"; tput sgr0
+wget https://nginx.org/download/nginx-1.11.10.tar.gz
+tput bold;tput setaf 2; echo "Download RTMP Module"; tput sgr0
+wget https://github.com/arut/nginx-rtmp-module/archive/master.zip
+
+#Entpacken
+tput bold;tput setaf 2; echo "Entpacke nginx und RTMP Module"; tput sgr0
+tar -zxvf nginx-1.11.10.tar.gz
+unzip master.zip
+cd nginx-1.11.10/
+
+#Build der Module
+tput bold;tput setaf 2; echo "Build nginx mit RTMP"; tput sgr0
+./configure --with-http_ssl_module --add-module=../nginx-rtmp-module-master
+make
+make install
+
+#Füge RTMP config hinzu
+tput bold;tput setaf 2; echo "Füge RTMP config an"; tput sgr0
+printf "$rtmp_config" >> /usr/local/nginx/conf/nginx.conf
+grep -A 10 rtmp /usr/local/nginx/conf/nginx.conf
+sleep 10
+
+#Erstelle Autostart
+tput bold;tput setaf 2; echo "Erstelle Autostart"; tput sgr0
+printf "$start_service" > /etc/systemd/system/nginx.service
+
+systemctl enable nginx.service
+systemctl is-enabled nginx.service
+
+#Starte nginx
+tput bold;tput setaf 2; echo "Starte nginx"; tput sgr0
+systemctl start nginx.service
+systemctl status nginx.service
